@@ -1,27 +1,22 @@
 require 'bundler/setup'
 require 'capybara'
-require 'capybara/dsl'
 require 'open-uri'
 
 require 'pry' # for debug
 
-Capybara.current_driver = :selenium
 Capybara.app_host = 'http://www.lib.nau.edu.ua'
 
-module NauLib
-  class Client
-    include Capybara::DSL
+module NauLibClient
+  class Library
 
-    def initialize
-      visit('/newbooks/newbooks.aspx')
-    end
-
-    def sections
+    def self.sections
       @_sections ||= get_sections
     end
 
   private
-    def get_sections
+    def self.get_sections
+      page = Capybara::Session.new(:selenium)
+      page.visit('/newbooks/newbooks.aspx')
       page.find('#RadioButtonList1').all('input[type="radio"]').map do |section_input|
         name = section_input.value
         Section.new(name, page)
@@ -32,7 +27,7 @@ module NauLib
   class Section
     attr_reader :name
 
-    def initialize(name, session)
+    def initialize(name, session=nil)
       @name    = name
       @session = session
     end
@@ -52,7 +47,7 @@ module NauLib
       book_rows = @session.find('#Table2').all('tr')[1..-1] # removing first row which is title
       book_rows.map do |book_row|
         id, title, section, size = book_row.all('td').map(&:text)
-        Book.new(title, id, size, name, @session)
+        Book.new(title: title, id: id, size: size, section: name, session: @session)
       end
     end
 
@@ -67,12 +62,12 @@ module NauLib
   class Book
     attr_reader :title, :id, :size, :section
 
-    def initialize(title, id, size, section, session)
-      @title   = title
-      @id      = id
-      @size    = size
-      @section = section
-      @session = session
+    def initialize(opts={})
+      @title   = opts[:title]
+      @id      = opts[:id]
+      @size    = opts[:size]
+      @section = opts[:section]
+      @session = opts[:session]
     end
 
     def inspect
@@ -115,17 +110,5 @@ module NauLib
     end
   end
 end
-
-client = NauLib::Client.new
-puts "NAU librarly sections:\n  " + client.sections.map(&:name).join("\n  ")
-
-the_section = client.sections.last
-puts "Books in the section '#{the_section.name}':\n  " + the_section.books.map(&:title).join("\n  ")
-
-the_book = the_section.books.first
-puts the_book.inspect
-
-file = the_book.download
-`open #{file}`
 
 # client.find(section: '', author_like: '', title_like: '', published_at: '')
