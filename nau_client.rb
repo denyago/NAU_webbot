@@ -13,13 +13,45 @@ module NauLibClient
       @_sections ||= get_sections
     end
 
+    def self.find(conditions={})
+      page = BookSearcher.find_page(conditions)
+      Books.page_to_books(page)
+    end
+
   private
     def self.get_sections
       page = Session.begin
       page.find('#RadioButtonList1').all('input[type="radio"]').map do |section_input|
         name = section_input.value
+        next if name == 'Всі розділи'
         Section.new(name, page)
       end
+    end
+  end
+
+  class BookSearcher
+    DEFAULT_CONDITIONS = {
+      section: 'Без обмежень',
+      title:   '',
+      author:  '',
+      published_after:  '',
+      published_before: ''
+    }
+
+    def self.find_page(conditions)
+      session = Session.begin
+      normalized_conditions = DEFAULT_CONDITIONS.merge(conditions)
+      normalized_conditions.each do |condition_name, value|
+        case condition_name
+          when :section then session.select(value, from: 'DropDownList1')
+          when :title   then session.fill_in('TextBox2', with: value)
+          when :author  then session.fill_in('TextBox1', with: value)
+          when :published_after  then session.fill_in('TextBox3', with: value)
+          when :published_before then session.fill_in('TextBox4', with: value)
+        end
+      end
+      session.click_button('Srch_Button')
+      session
     end
   end
 
@@ -40,11 +72,7 @@ module NauLibClient
     end
 
     def get_books_page
-      session.within("#form1") do
-        session.select(name, from: 'DropDownList1')
-        session.click_button('Srch_Button')
-      end
-      session
+      BookSearcher.find_page(section: name)
     end
 
   private
@@ -53,12 +81,7 @@ module NauLibClient
     end
 
     def get_books
-      get_books_page
-      book_rows = session.find('#Table2').all('tr')[1..-1] # removing first row which is title
-      book_rows.map do |book_row|
-        id, title, section, size = book_row.all('td').map(&:text)
-        Book.new(title: title, id: id, size: size, section: name, session: session)
-      end
+      Books.page_to_books(get_books_page)
     end
   end
 
@@ -121,6 +144,16 @@ module NauLibClient
     def self.begin
       @session ||= Capybara::Session.new(:selenium).tap do |session|
         session.visit('/newbooks/newbooks.aspx')
+      end
+    end
+  end
+
+  class Books
+    def self.page_to_books(page)
+      book_rows = page.find('#Table2').all('tr')[1..-1] # removing first row which is title
+      book_rows.map do |book_row|
+        id, title, section, size = book_row.all('td').map(&:text)
+        Book.new(title: title, id: id, size: size, section: section, session: page)
       end
     end
   end
