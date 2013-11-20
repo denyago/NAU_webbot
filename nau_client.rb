@@ -15,8 +15,7 @@ module NauLibClient
 
   private
     def self.get_sections
-      page = Capybara::Session.new(:selenium)
-      page.visit('/newbooks/newbooks.aspx')
+      page = Session.begin
       page.find('#RadioButtonList1').all('input[type="radio"]').map do |section_input|
         name = section_input.value
         Section.new(name, page)
@@ -40,21 +39,25 @@ module NauLibClient
       @_books ||= get_books
     end
 
-  private
-
-    def get_books
-      visit_books_page
-      book_rows = @session.find('#Table2').all('tr')[1..-1] # removing first row which is title
-      book_rows.map do |book_row|
-        id, title, section, size = book_row.all('td').map(&:text)
-        Book.new(title: title, id: id, size: size, section: name, session: @session)
+    def get_books_page
+      session.within("#form1") do
+        session.select(name, from: 'DropDownList1')
+        session.click_button('Srch_Button')
       end
+      session
     end
 
-    def visit_books_page
-      @session.within("#form1") do
-        @session.select(name, from: 'DropDownList1')
-        @session.click_button('Srch_Button')
+  private
+    def session
+      @session ||= Session.begin
+    end
+
+    def get_books
+      get_books_page
+      book_rows = session.find('#Table2').all('tr')[1..-1] # removing first row which is title
+      book_rows.map do |book_row|
+        id, title, section, size = book_row.all('td').map(&:text)
+        Book.new(title: title, id: id, size: size, section: name, session: session)
       end
     end
   end
@@ -84,8 +87,12 @@ module NauLibClient
 
   private
 
+    def session
+      @session ||= Section.new(section).get_books_page
+    end
+
     def get_url
-      @session.find('a', text: title)[:href]
+      session.find('a', text: title)[:href]
     end
   end
 
@@ -107,6 +114,14 @@ module NauLibClient
     def save_path
       file_name = File.basename(@url)
       File.join('.', file_name)
+    end
+  end
+
+  class Session
+    def self.begin
+      @session ||= Capybara::Session.new(:selenium).tap do |session|
+        session.visit('/newbooks/newbooks.aspx')
+      end
     end
   end
 end
