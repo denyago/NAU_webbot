@@ -2,6 +2,8 @@
 
 Library for CLI operations on NAU workbooks library.
 
+Presentation: https://speakerdeck.com/denyago/ruby-for-webbots
+
 ## Setup
 
 It's worth to have any Linux/OSX setup. Functioning under Windows is not guaranteed.
